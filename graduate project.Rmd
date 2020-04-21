@@ -1,0 +1,100 @@
+---
+title: "Graduate Project"
+author: "Mary McBride"
+date: "2020-04-24"
+output: html_document
+---
+
+### Load packages
+
+```{r load-packages, message = FALSE, warning = FALSE}
+library(tidyverse) 
+library(tidymodels)
+```
+
+
+I was able to find a data set on kaggle that included reviews and ratings for online recipies. I am trying to predict what the rating will be based on the number of characters in a review. My prediciton is that a longer review will lead to worse ratings. 
+
+Prediciton question: Does a longer review mean that someone left a worse rating? 
+
+To test my prediciton I will be making a decision tree. This way I can see what the cut off points are for each rating.
+
+
+First, I needed to add another column to my data set to count the number of characters in the review. 
+Next, I split the data and did cross validation on the training data, which will be used later. 
+
+
+
+
+
+```{r getting data ready}
+set.seed(7)
+rec <- read_csv("rec.csv")
+
+rec$noChar <- nchar(rec$Review)
+
+```
+
+
+```{r crossval}
+
+
+set.seed(7)
+rec_split <- initial_split(rec, prop = 0.5)
+rec_train <- training(rec_split)
+
+
+rec_cv <- vfold_cv(rec_train , v = 10)
+```
+
+
+
+
+
+```{r tune}
+tree_spec <- decision_tree(
+  cost_complexity = tune(), 
+  tree_depth = 10,
+  mode = "regression") %>%
+  set_engine("rpart")
+
+
+
+grid <- expand_grid(cost_complexity = seq(0, 100, by = 10))
+model <- tune_grid(tree_spec,
+                   Rating ~ noChar,
+                   grid = grid,
+                   resamples = rec_cv)
+
+
+
+
+model %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  arrange(mean)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
