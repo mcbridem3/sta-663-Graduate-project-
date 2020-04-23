@@ -7,72 +7,128 @@ output: html_document
 
 ### Load packages
 
+```{r install}
+install.packages("rpart.plot")
+
+```
+
 ```{r load-packages, message = FALSE, warning = FALSE}
 library(tidyverse) 
 library(tidymodels)
+library(rpart.plot)
 ```
 
 
-I was able to find a data set on kaggle that included reviews and ratings for online recipies. I am trying to predict what the rating will be based on the number of characters in a review. My prediciton is that a longer review will lead to worse ratings. 
-
-Prediciton question: Does a longer review mean that someone left a worse rating? 
-
-To test my prediciton I will be making a decision tree. This way I can see what the cut off points are for each rating.
+For my analysis, I found a data set on Kaggle that included reviews and ratings of food bought on Amazon. I decided to look at whether I could predict the rating given, based on the length of the review.
 
 
-First, I needed to add another column to my data set to count the number of characters in the review. 
-Next, I split the data and did cross validation on the training data, which will be used later. 
+Prediction question: Am I able to predict the rating given to a food product based on the corresponding length of the review? 
 
 
-
-
+The data set that I found had 11 variables, but I only focused on Score (overall rating from 1 to 5) and Text ( written review that buyer left). 
+The first thing that I did was read in the data from excel. I then added a column to the data set that counted the number of characters left in the review. I called this noChar. 
 
 ```{r getting data ready}
 set.seed(7)
-rec <- read_csv("rec.csv")
+review <- read_csv("Reviews.csv")
+review$noChar <- nchar(review$Text)
 
-rec$noChar <- nchar(rec$Review)
 
 ```
 
+
+Next, I split the data into testing and training sets. I also set up cross validation to be used in tuning later. 
 
 ```{r crossval}
 
 
 set.seed(7)
-rec_split <- initial_split(rec, prop = 0.5)
-rec_train <- training(rec_split)
+review_split <- initial_split(review, prop = 0.5)
+
+set.seed(7)
+review_train <- training(review_split)
+
+set.seed(7)
+review_cv <- vfold_cv(review , v = 10)
 
 
-rec_cv <- vfold_cv(rec_train , v = 10)
+
 ```
 
 
 
 
+I first decided to fit a regular decision tree. I thought this would be helpful to visualize the data since I am able to plot the tree. I tuned the cost complexity and found that .002 gave me the smallest RMSE. 
 
-```{r tune}
+
+```{r decison tree}
+
+
 tree_spec <- decision_tree(
   cost_complexity = tune(), 
   tree_depth = 10,
   mode = "regression") %>%
   set_engine("rpart")
 
+grid <- expand_grid(cost_complexity = seq( 0, .05, by =.001))
 
+set.seed(7)
+results <- tune_grid(tree_spec,
+                     Score ~ noChar,
+                     grid = grid,
+                     resamples = review_cv)
 
-grid <- expand_grid(cost_complexity = seq(0, 100, by = 10))
-model <- tune_grid(tree_spec,
-                   Rating ~ noChar,
-                   grid = grid,
-                   resamples = rec_cv)
-
-
-
-
-model %>%
+set.seed(7)
+results %>%
   collect_metrics() %>%
   filter(.metric == "rmse") %>%
   arrange(mean)
+
+final_complexity <- results %>%
+  select_best(metric = "rmse") %>%
+  pull()
+
+
+```
+Next I wanted to plot the decision tree. Based on the output, to me this model seems to be good at predicting higher scores than lower scores. It does not tell us any information about scores lower than 2.5. 
+
+```{r plot}
+tree_plot <- decision_tree(
+  cost_complexity = final_complexity,
+  tree_depth = 10,
+  mode = "regression") %>%
+  set_engine("rpart")
+model <- fit(tree_plot,
+                   Score ~ noChar,
+             data= review_train)
+
+rpart.plot(model$fit,
+           roundint = FALSE )
+
+
+
+
+```
+
+Finally, I found the RMSE for the testing data to make sure that my model did not overfit the training data. The RMSE was 1.305, which I think is not very accurate when you consider that the over rating is between 1 and 5. 
+
+```{r rmse of test data for tree}
+review_test <- testing(review_split)
+
+final_model <- fit(tree_plot,
+                   Score ~ noChar,
+                   data = review_train)
+
+
+
+
+
+final_model %>%
+  predict(new_data = review_test) %>%
+  bind_cols(review_test) %>%
+  metrics(truth = Score, estimate = .pred)
+
+
 
 ```
 
@@ -81,19 +137,95 @@ model %>%
 
 
 
+Because this model did not do a very good job in my opinion, I decided to fit a Boosted model to see if it did any better. I fit the model, tuning the number of trees. I found that 50 trees produced the smallest RMSE on the training data. I then also plotted the trees vs. mean to better visualize this relationship.
+
+
+
+```{r boosted tree}
+
+boost_spec <- boost_tree(
+  mode = "regression", 
+  tree_depth = 1, 
+  trees = tune(), 
+  learn_rate = 0.1, 
+) %>% 
+  set_engine("xgboost")
+
+grid <- expand_grid(trees = seq( 0, 500, by =25))
+
+
+
+set.seed(7)
+results <- tune_grid(boost_spec,
+                     Score ~ noChar,
+                     grid = grid,
+                     resamples = review_cv)
+
+
+results %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  arrange(mean)
+
+final_complexity2 <- results %>%
+  select_best(metric = "rmse") %>%
+  pull()
+
+
+
+```
+
+
+Finally, I found the RMSE of the testing data for the boosted model. I found this to be 1.2999. While this is marginally better than the original decision tree, again it does not seem very accurate to me when you consider that the rating is from 1 to 5. 
+
+
+```{r boost test RMSE}
+
+
+
+boost_fin <- boost_tree(
+  mode = "regression", 
+  tree_depth = 1, 
+  trees = final_complexity2, 
+  learn_rate = 0.1, 
+) %>% 
+  set_engine("xgboost")
 
 
 
 
 
 
+final_model <- fit(boost_fin,
+                   Score ~ noChar,
+                   data = review_train)
+
+
+
+
+
+final_model %>%
+  predict(new_data = review_test) %>%
+  bind_cols(review_test) %>%
+  metrics(truth = Score, estimate = .pred)
+
+
+
+
+```
+
+
+
+
+Overall, while I think that it would be very interesting to be able to predict the rating just by looking at the length of review, I don't know that any model will be able to do so accurately. I think that the length of the review has more to do with personality type verses whether you enjoyed the product.  I think this would be an interesting topic or further study. 
 
 
 
 
 
 
-
+Link to data from Kaggle : https://www.kaggle.com/snap/amazon-fine-food-reviews
+I had to cut down some of the data because it was too large for my computer/ internet to handle. 
 
 
 
