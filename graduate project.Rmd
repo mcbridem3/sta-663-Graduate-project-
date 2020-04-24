@@ -19,14 +19,14 @@ library(rpart.plot)
 ```
 
 
-For my analysis, I found a data set on Kaggle that included reviews and ratings of food bought on Amazon. I decided to look at whether I could predict the rating given, based on the length of the review.
+For my analysis, I found a data set on Kaggle that included reviews and ratings of food items bought on Amazon. I decided to look at whether I could predict the rating given, based on the length of the review.
 
 
 Prediction question: Am I able to predict the rating given to a food product based on the corresponding length of the review? 
 
 
 The data set that I found had 11 variables, but I only focused on Score (overall rating from 1 to 5) and Text ( written review that buyer left). 
-The first thing that I did was read in the data from excel. I then added a column to the data set that counted the number of characters left in the review. I called this noChar. 
+The first thing that I did was read in the data from Excel. I then added a column to the data set that counted the number of characters left in the review. I called this noChar. 
 
 ```{r getting data ready}
 set.seed(7)
@@ -48,7 +48,7 @@ review_split <- initial_split(review, prop = 0.5)
 set.seed(7)
 review_train <- training(review_split)
 
-set.seed(7)
+set.seed(8)
 review_cv <- vfold_cv(review , v = 10)
 
 
@@ -90,7 +90,7 @@ final_complexity <- results %>%
 
 
 ```
-Next I wanted to plot the decision tree. Based on the output, to me this model seems to be good at predicting higher scores than lower scores. It does not tell us any information about scores lower than 2.5. 
+Next I wanted to plot the decision tree. Based on the output, this model seems to be better at predicting higher scores than lower scores. It does not tell us any information about scores lower than 2.6.  
 
 ```{r plot}
 tree_plot <- decision_tree(
@@ -110,7 +110,7 @@ rpart.plot(model$fit,
 
 ```
 
-Finally, I found the RMSE for the testing data to make sure that my model did not overfit the training data. The RMSE was 1.305, which I think is not very accurate when you consider that the over rating is between 1 and 5. 
+Finally, I found the RMSE for the testing data to make sure that my model did not overfit the training data. The RMSE was 1.305, which I think is not very accurate when you consider that the overall ratings have to be between a 1 and 5. 
 
 ```{r rmse of test data for tree}
 review_test <- testing(review_split)
@@ -137,8 +137,7 @@ final_model %>%
 
 
 
-Because this model did not do a very good job in my opinion, I decided to fit a Boosted model to see if it did any better. I fit the model, tuning the number of trees. I found that 50 trees produced the smallest RMSE on the training data. I then also plotted the trees vs. mean to better visualize this relationship.
-
+Because this model did not do a very good job in my opinion, I decided to fit a Boosted model to see if it did any better. I fit the model, tuning the number of trees. I found that 50 trees produced the smallest RMSE on the training data. 
 
 
 ```{r boosted tree}
@@ -176,7 +175,7 @@ final_complexity2 <- results %>%
 ```
 
 
-Finally, I found the RMSE of the testing data for the boosted model. I found this to be 1.2999. While this is marginally better than the original decision tree, again it does not seem very accurate to me when you consider that the rating is from 1 to 5. 
+Finally, I found the RMSE of the testing data for the boosted model. I found this to be 1.2999. While this is marginally better than the original decision tree, again it does not seem very accurate to me, when you consider that the rating is from 1 to 5. 
 
 
 ```{r boost test RMSE}
@@ -217,7 +216,7 @@ final_model %>%
 
 
 
-Overall, while I think that it would be very interesting to be able to predict the rating just by looking at the length of review, I don't know that any model will be able to do so accurately. I think that the length of the review has more to do with personality type verses whether you enjoyed the product.  I think this would be an interesting topic or further study. 
+Overall, while I think that it would be very interesting to be able to predict the rating just by looking at the length of review, however, I don't know that any model will be able to do so accurately. I think that the length of the review has more to do with personality type or another variable verses whether you enjoyed the product.  I think this would be an interesting topic of further study. 
 
 
 
